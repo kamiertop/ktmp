@@ -1,0 +1,36 @@
+# Gradle and build outputs
+.gradle/
+.kotlin/
+**/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.hprof
+lint-results*.html
+lint-results*.xml
+
+# Local Android SDK configuration
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.claude/
+
+# Native build and profiling output
+.externalNativeBuild/
+.cxx/
+captures/
+
+# Signing material
+*.jks
+*.keystore
+keystore.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+.claude
+.kotlin

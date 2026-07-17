@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ktmp</string>
+    <string name="tab_all">全部</string>
+    <string name="tab_albums">专辑</string>
+    <string name="tab_artists">艺术家</string>
+    <string name="tab_folders">文件夹</string>
+    <string name="tab_playlists">合集</string>
+    <string name="now_playing">正在播放</string>
+    <string name="settings">设置</string>
+    <string name="library">媒体库</string>
+    <string name="create_playlist">新建合集</string>
+    <string name="add_to_playlist">添加到合集</string>
+    <string name="sleep_timer">定时关闭</string>
+    <string name="loop_mode">循环模式</string>
+    <string name="loop_off">关闭</string>
+    <string name="loop_one">单曲循环</string>
+    <string name="loop_all">列表循环</string>
+    <string name="shuffle">随机播放</string>
+    <string name="scan_media">扫描媒体</string>
+    <string name="no_media_found">未发现媒体文件</string>
+    <string name="grant_permission">授权存储权限以扫描本地音频和视频文件</string>
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="next">下一曲</string>
+    <string name="previous">上一曲</string>
+    <string name="playback_channel">播放控制</string>
+</resources>
