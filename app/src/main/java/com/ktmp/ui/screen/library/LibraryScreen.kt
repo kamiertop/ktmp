@@ -2,6 +2,7 @@ package com.ktmp.ui.screen.library
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -23,15 +24,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,6 +66,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +76,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -92,16 +101,18 @@ fun LibraryScreen(
     onPlaylistClick: (Long) -> Unit,
     onPlayPlaylist: (Long) -> Unit,
     onCreatePlaylist: () -> Unit,
+    onPlaySelectedNow: () -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val allMedia by viewModel.allMedia.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val playlistCounts by viewModel.playlistCounts.collectAsState()
     val playlistCovers by viewModel.playlistCovers.collectAsState()
-    val recentlyPlayed by viewModel.recentlyPlayed.collectAsState()
+    val isMultiSelectMode by viewModel.isMultiSelectMode.collectAsState()
+    val selectedPlaylistIds by viewModel.selectedPlaylistIds.collectAsState()
 
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("全部", "合集", "最近")
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val tabs = listOf("全部", "合集")
 
     // 搜索
     var searchQuery by remember { mutableStateOf("") }
@@ -173,8 +184,14 @@ fun LibraryScreen(
         }
     }
 
+    // 多选模式下，返回键先退出多选
+    BackHandler(enabled = isMultiSelectMode) {
+        viewModel.exitMultiSelect()
+    }
+
     Scaffold(
         floatingActionButton = {
+            if (isMultiSelectMode && selectedTab == 1) return@Scaffold
             Box {
                 FloatingActionButton(
                     onClick = {
@@ -214,13 +231,35 @@ fun LibraryScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            TabRow(selectedTabIndex = selectedTab) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = { Text(title) }
+            if (isMultiSelectMode && selectedTab == 1) {
+                // 多选操作栏
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = { viewModel.exitMultiSelect() }) {
+                        Text("取消")
+                    }
+                    Text(
+                        text = "已选 ${selectedPlaylistIds.size} 个",
+                        style = MaterialTheme.typography.titleSmall
                     )
+                    TextButton(onClick = { viewModel.selectAllPlaylists() }) {
+                        Text("全选")
+                    }
+                }
+            } else {
+                TabRow(selectedTabIndex = selectedTab) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = { Text(title) }
+                        )
+                    }
                 }
             }
 
@@ -312,47 +351,78 @@ fun LibraryScreen(
                             onAction = onCreatePlaylist
                         )
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(playlists) { playlist ->
-                                PlaylistCard(
-                                    playlist = playlist,
-                                    mediaCount = playlistCounts[playlist.id] ?: 0,
-                                    coverUri = playlistCovers[playlist.id] ?: playlist.coverUri,
-                                    onClick = { onPlaylistClick(playlist.id) },
-                                    onPlay = { onPlayPlaylist(playlist.id) },
-                                    onRename = {
-                                        renamePlaylistId = playlist.id
-                                        renamePlaylistName = playlist.name
-                                    },
-                                    onDelete = if (playlist.name == "默认合集") null else {
-                                        {
-                                            deletePlaylistId = playlist.id
-                                            deletePlaylistName = playlist.name
-                                        }
-                                    }
-                                )
+                        Column {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(playlists) { playlist ->
+                                    PlaylistCard(
+                                        playlist = playlist,
+                                        mediaCount = playlistCounts[playlist.id] ?: 0,
+                                        coverUri = playlistCovers[playlist.id] ?: playlist.coverUri,
+                                        isSelected = playlist.id in selectedPlaylistIds,
+                                        isMultiSelectMode = isMultiSelectMode,
+                                        onClick = {
+                                            if (isMultiSelectMode) {
+                                                viewModel.togglePlaylistSelection(playlist.id)
+                                            } else {
+                                                onPlaylistClick(playlist.id)
+                                            }
+                                        },
+                                        onPlay = { onPlayPlaylist(playlist.id) },
+                                        onRename = if (playlist.name == "默认合集") null else {
+                                            {
+                                                renamePlaylistId = playlist.id
+                                                renamePlaylistName = playlist.name
+                                            }
+                                        },
+                                        onDelete = if (playlist.name == "默认合集") null else {
+                                            {
+                                                deletePlaylistId = playlist.id
+                                                deletePlaylistName = playlist.name
+                                            }
+                                        },
+                                        onEnterMultiSelect = {
+                                            viewModel.enterMultiSelect(playlist.id)
+                                        },
+                                        onAddToQueue = {
+                                            viewModel.playPlaylist(playlist.id) { items ->
+                                                playerController.addMultipleToQueue(items)
+                                            }
+                                        },
+                                        onPlayNow = { onPlayPlaylist(playlist.id) }
+                                    )
+                                }
                             }
-                        }
-                    }
-                }
-                2 -> {
-                    if (recentlyPlayed.isEmpty()) {
-                        EmptyStateView(message = "还没有播放记录")
-                    } else {
-                        LazyColumn {
-                            items(recentlyPlayed, key = { "recent_${it.id}" }) { item ->
-                                MediaListItem(
-                                    item = item,
-                                    onClick = { onMediaClick(item, recentlyPlayed) },
-                                    onPlayNext = { playerController.playNext(item) },
-                                    onAddToQueue = { playerController.addToQueue(item) },
-                                    onAddToPlaylist = {
-                                        addToPlaylistMediaId = item.id
+                            // 多选底部操作栏
+                            if (isMultiSelectMode) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Button(
+                                        onClick = { viewModel.addSelectedToQueue() },
+                                        enabled = selectedPlaylistIds.isNotEmpty(),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("添加到队列")
                                     }
-                                )
+                                    Button(
+                                        onClick = {
+                                            viewModel.playSelectedNow()
+                                            onPlaySelectedNow()
+                                        },
+                                        enabled = selectedPlaylistIds.isNotEmpty(),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("立即播放")
+                                    }
+                                }
                             }
                         }
                     }
@@ -438,11 +508,17 @@ private fun PlaylistCard(
     playlist: Playlist,
     mediaCount: Int,
     coverUri: String? = null,
+    isSelected: Boolean = false,
+    isMultiSelectMode: Boolean = false,
     onClick: () -> Unit,
     onPlay: () -> Unit,
     onRename: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    onEnterMultiSelect: (() -> Unit)? = null,
+    onAddToQueue: (() -> Unit)? = null,
+    onPlayNow: (() -> Unit)? = null
 ) {
+    var showContextMenu by remember { mutableStateOf(false) }
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -491,7 +567,10 @@ private fun PlaylistCard(
                     .fillMaxWidth()
                     .combinedClickable(
                         onClick = onClick,
-                        onLongClick = onRename
+                        onLongClick = {
+                            if (isMultiSelectMode) return@combinedClickable
+                            showContextMenu = true
+                        }
                     )
                     .padding(16.dp)
             ) {
@@ -499,6 +578,17 @@ private fun PlaylistCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // 多选模式下显示 checkbox
+                    if (isMultiSelectMode) {
+                        Icon(
+                            imageVector = if (isSelected) Icons.Default.CheckBox
+                            else Icons.Outlined.CheckBoxOutlineBlank,
+                            contentDescription = if (isSelected) "已选中" else "未选中",
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 8.dp).size(24.dp)
+                        )
+                    }
                     val coverModel = coverUri?.let { Uri.parse(it) }
                     if (coverModel != null) {
                         AsyncImage(
@@ -536,17 +626,29 @@ private fun PlaylistCard(
                             )
                         }
                         Text(
-                            text = "$mediaCount 个视频",
+                            text = "$mediaCount 个曲目",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = onPlay) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "播放",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                    if (!isMultiSelectMode && onRename != null) {
+                        IconButton(onClick = onRename) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "重命名",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    if (!isMultiSelectMode) {
+                        IconButton(onClick = onPlay) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "播放",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -564,6 +666,49 @@ private fun PlaylistCard(
                             .format(Date(playlist.createdAt)),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 长按上下文菜单
+            DropdownMenu(
+                expanded = showContextMenu,
+                onDismissRequest = { showContextMenu = false },
+                offset = DpOffset(x = 64.dp, y = 0.dp)
+            ) {
+                onAddToQueue?.let {
+                    DropdownMenuItem(
+                        text = { Text("添加到队列") },
+                        onClick = { showContextMenu = false; it() },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) }
+                    )
+                }
+                onPlayNow?.let {
+                    DropdownMenuItem(
+                        text = { Text("立即播放") },
+                        onClick = { showContextMenu = false; it() },
+                        leadingIcon = { Icon(Icons.Default.PlayArrow, null) }
+                    )
+                }
+                onEnterMultiSelect?.let {
+                    DropdownMenuItem(
+                        text = { Text("多选") },
+                        onClick = { showContextMenu = false; it() },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, null) }
+                    )
+                }
+                onRename?.let {
+                    DropdownMenuItem(
+                        text = { Text("重命名") },
+                        onClick = { showContextMenu = false; it() },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) }
+                    )
+                }
+                onDelete?.let {
+                    DropdownMenuItem(
+                        text = { Text("删除") },
+                        onClick = { showContextMenu = false; it() },
+                        leadingIcon = { Icon(Icons.Default.Delete, null) }
                     )
                 }
             }

@@ -7,6 +7,8 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -80,6 +82,16 @@ class MusicService : MediaSessionService() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 notificationManager.cancel()
                 stopSelf()
+            }
+        })
+
+        // 切歌、播放/暂停时更新通知
+        player?.addListener(object : Player.Listener {
+            override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                updateNotification()
+            }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                updateNotification()
             }
         })
     }

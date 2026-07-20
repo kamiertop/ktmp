@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,6 +44,7 @@ fun MiniPlayer(
     positionMs: Long,
     durationMs: Long,
     onPlayPauseClick: () -> Unit,
+    onSkipPreviousClick: () -> Unit,
     onSkipNextClick: () -> Unit,
     onMiniPlayerClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -101,6 +103,13 @@ fun MiniPlayer(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                }
+
+                IconButton(onClick = onSkipPreviousClick) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = "Previous"
+                    )
                 }
 
                 IconButton(onClick = onPlayPauseClick) {

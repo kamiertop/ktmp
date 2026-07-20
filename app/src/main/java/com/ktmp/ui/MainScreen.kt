@@ -4,6 +4,7 @@ import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -22,13 +23,16 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.ktmp.domain.model.PlaybackState
 import com.ktmp.playback.PlayerController
 import com.ktmp.transfer.WifiTransferManager
+import com.ktmp.ui.components.MiniPlayer
 import com.ktmp.ui.navigation.KtmpNavHost
 import com.ktmp.ui.navigation.Route
 import com.ktmp.ui.screen.library.LibraryViewModel
@@ -44,6 +48,15 @@ fun MainScreen(
     val currentRoute = currentBackStackEntry?.destination?.route
 
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    // MiniPlayer 状态
+    val metadata by playerController.currentMetadata.collectAsState()
+    val miniPlaybackState by playerController.playbackState.collectAsState()
+    val miniPositionMs by playerController.positionMs.collectAsState()
+    val miniDurationMs by playerController.durationMs.collectAsState()
+    val miniPlayerVisible = miniPlaybackState != PlaybackState.IDLE
+        && currentRoute != Route.NowPlaying.route
+        && currentRoute != Route.VideoPlayer.route
 
     // 双击/双滑返回退出
     val context = LocalContext.current
@@ -94,13 +107,33 @@ fun MainScreen(
             }
         }
     ) { padding ->
-        // 只保留底部导航栏的边距，去掉顶部状态栏的额外空间
-        Box(modifier = Modifier.padding(bottom = padding.calculateBottomPadding())) {
-            KtmpNavHost(
-                navController = navController,
-                playerController = playerController,
-                wifiTransferManager = wifiTransferManager,
-                libraryViewModel = libraryViewModel
+        Column(modifier = Modifier.padding(bottom = padding.calculateBottomPadding())) {
+            Box(modifier = Modifier.weight(1f)) {
+                KtmpNavHost(
+                    navController = navController,
+                    playerController = playerController,
+                    wifiTransferManager = wifiTransferManager,
+                    libraryViewModel = libraryViewModel
+                )
+            }
+            MiniPlayer(
+                isVisible = miniPlayerVisible,
+                title = metadata?.title?.toString() ?: "未选择曲目",
+                artist = metadata?.artist?.toString(),
+                albumArtUri = metadata?.artworkUri?.toString(),
+                playbackState = miniPlaybackState,
+                positionMs = miniPositionMs,
+                durationMs = miniDurationMs,
+                onPlayPauseClick = {
+                    if (miniPlaybackState == PlaybackState.PLAYING) playerController.pause()
+                    else playerController.play()
+                },
+                onSkipPreviousClick = { playerController.skipToPrevious() },
+                onSkipNextClick = { playerController.skipToNext() },
+                onMiniPlayerClick = {
+                    selectedTab = 1
+                    navController.navigate(Route.NowPlaying.route)
+                }
             )
         }
     }

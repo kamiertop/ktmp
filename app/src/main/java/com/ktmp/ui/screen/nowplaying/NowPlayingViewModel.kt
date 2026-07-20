@@ -64,7 +64,7 @@ class NowPlayingViewModel @Inject constructor(
     fun moveQueueItem(fromIndex: Int, toIndex: Int) = playerController.moveQueueItem(fromIndex, toIndex)
     fun clearQueue() = playerController.clearQueue()
     fun toggleShuffle() = playerController.setLoopMode(
-        if (playerController.shuffleEnabled.value) LoopMode.ALL else LoopMode.SHUFFLE
+        if (playerController.shuffleEnabled.value) LoopMode.NONE else LoopMode.SHUFFLE
     )
 
     private fun recordCurrentPlay() {

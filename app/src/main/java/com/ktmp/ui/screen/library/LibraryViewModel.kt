@@ -10,6 +10,8 @@ import com.ktmp.domain.model.MediaItem
 import com.ktmp.domain.model.MediaType
 import android.net.Uri
 import com.ktmp.domain.model.Playlist
+import com.ktmp.domain.model.toMedia3Item
+import com.ktmp.playback.PlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,7 +27,8 @@ class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playlistRepository: PlaylistRepository,
     private val playHistoryRepository: PlayHistoryRepository,
-    private val mediaScanner: MediaScanner
+    private val mediaScanner: MediaScanner,
+    private val playerController: PlayerController
 ) : ViewModel() {
 
     init {
@@ -139,6 +142,64 @@ class LibraryViewModel @Inject constructor(
             if (items.isNotEmpty()) {
                 onReady(items)
             }
+        }
+    }
+
+    // -- 多选模式 --
+
+    private val _isMultiSelectMode = MutableStateFlow(false)
+    val isMultiSelectMode: StateFlow<Boolean> = _isMultiSelectMode.asStateFlow()
+
+    private val _selectedPlaylistIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedPlaylistIds: StateFlow<Set<Long>> = _selectedPlaylistIds.asStateFlow()
+
+    fun enterMultiSelect(playlistId: Long) {
+        _isMultiSelectMode.value = true
+        _selectedPlaylistIds.value = setOf(playlistId)
+    }
+
+    fun togglePlaylistSelection(playlistId: Long) {
+        _selectedPlaylistIds.value = _selectedPlaylistIds.value.toMutableSet().apply {
+            if (contains(playlistId)) remove(playlistId) else add(playlistId)
+        }
+        if (_selectedPlaylistIds.value.isEmpty()) {
+            _isMultiSelectMode.value = false
+        }
+    }
+
+    fun selectAllPlaylists() {
+        viewModelScope.launch {
+            val all = playlistRepository.getAllPlaylists().first()
+            _selectedPlaylistIds.value = all.map { it.id }.toSet()
+        }
+    }
+
+    fun exitMultiSelect() {
+        _isMultiSelectMode.value = false
+        _selectedPlaylistIds.value = emptySet()
+    }
+
+    fun addSelectedToQueue() {
+        viewModelScope.launch {
+            val ids = _selectedPlaylistIds.value.toList()
+            if (ids.isEmpty()) return@launch
+            val items = ids.map { playlistRepository.getPlaylistItems(it).first() }.flatten()
+            if (items.isNotEmpty()) {
+                playerController.addMultipleToQueue(items)
+            }
+            exitMultiSelect()
+        }
+    }
+
+    fun playSelectedNow() {
+        viewModelScope.launch {
+            val ids = _selectedPlaylistIds.value.toList()
+            if (ids.isEmpty()) return@launch
+            val items = ids.map { playlistRepository.getPlaylistItems(it).first() }.flatten()
+            if (items.isNotEmpty()) {
+                playerController.playMedia(items.map { it.toMedia3Item() }, 0)
+            }
+            exitMultiSelect()
         }
     }
 

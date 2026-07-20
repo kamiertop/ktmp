@@ -81,6 +81,7 @@ fun KtmpNavHost(
                     }
                 },
                 onCreatePlaylist = { showCreatePlaylistDialog = true },
+                onPlaySelectedNow = { navController.navigate(Route.NowPlaying.route) },
                 viewModel = libraryViewModel
             )
         }
@@ -115,8 +116,10 @@ fun KtmpNavHost(
                 playlistId = playlistId,
                 playerController = playerController,
                 onBack = { navController.popBackStack() },
-                onMediaClick = { item, _ ->
-                    playerController.playMedia(listOf(item.toMedia3Item()), 0)
+                onMediaClick = { item, list ->
+                    val mediaItems = list.map { it.toMedia3Item() }
+                    val startIndex = list.indexOf(item).coerceAtLeast(0)
+                    playerController.playMedia(mediaItems, startIndex)
                     navController.navigate(Route.NowPlaying.route)
                 },
                 onAddToPlaylist = {

@@ -72,7 +72,18 @@ class PlayerController @Inject constructor(
                 Player.STATE_IDLE -> PlaybackState.IDLE
                 Player.STATE_BUFFERING -> PlaybackState.BUFFERING
                 Player.STATE_READY -> PlaybackState.READY
-                Player.STATE_ENDED -> PlaybackState.ENDED
+                Player.STATE_ENDED -> {
+                    // 播放列表已播放完毕，回到开头以便用户重新播放
+                    scope.launch {
+                        mediaController?.apply {
+                            if (mediaItemCount > 0) {
+                                seekToDefaultPosition(0)
+                                pause()
+                            }
+                        }
+                    }
+                    PlaybackState.ENDED
+                }
                 else -> PlaybackState.IDLE
             }
         }
@@ -86,12 +97,7 @@ class PlayerController @Inject constructor(
         }
 
         override fun onRepeatModeChanged(repeatMode: Int) {
-            _loopMode.value = when {
-                _shuffleEnabled.value -> LoopMode.SHUFFLE
-                repeatMode == Player.REPEAT_MODE_ONE -> LoopMode.ONE
-                repeatMode == Player.REPEAT_MODE_ALL -> LoopMode.ALL
-                else -> LoopMode.NONE
-            }
+            // _loopMode is managed by setLoopMode(); only update shuffle-derived state here
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -178,6 +184,17 @@ class PlayerController @Inject constructor(
         persistQueue()
     }
 
+    fun addMultipleToQueue(domainItems: List<com.ktmp.domain.model.MediaItem>) {
+        val mc = mediaController ?: return
+        if (domainItems.isEmpty()) return
+        val endIndex = mc.mediaItemCount
+        for ((i, item) in domainItems.withIndex()) {
+            mc.addMediaItem(endIndex + i, item.toMedia3Item())
+        }
+        refreshPlaylist()
+        persistQueue()
+    }
+
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         val mc = mediaController ?: return
         mc.moveMediaItem(fromIndex, toIndex)
@@ -198,6 +215,7 @@ class PlayerController @Inject constructor(
 
     fun setLoopMode(mode: LoopMode) {
         val controller = mediaController ?: return
+        _loopMode.value = mode
         when (mode) {
             LoopMode.NONE -> {
                 controller.shuffleModeEnabled = false
@@ -209,10 +227,10 @@ class PlayerController @Inject constructor(
             }
             LoopMode.ALL -> {
                 controller.shuffleModeEnabled = false
-                controller.repeatMode = Player.REPEAT_MODE_ALL
+                controller.repeatMode = Player.REPEAT_MODE_OFF
             }
             LoopMode.SHUFFLE -> {
-                controller.repeatMode = Player.REPEAT_MODE_ALL
+                controller.repeatMode = Player.REPEAT_MODE_OFF
                 controller.shuffleModeEnabled = true
             }
         }
